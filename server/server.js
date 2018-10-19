@@ -12,7 +12,7 @@ app.use(bodyParser.json());
 let dbConnection;
 MongoClient.connect(url, function(err, db) {
   if (err) throw err;
-  dbConnection = db.db("atmFunctionDb");
+  dbConnection = db.db("mydb");
   console.log("Database created!");
   // db.close();
 })
@@ -53,19 +53,89 @@ app.post('/cardVerification',function(req,res) {
   })
 })
 
+// app.get('/calculateAmount',function(req,res) {
+//   dbConnection.collection('atmFields').find({}).toArray(function(err, atmResult) {
+//     console.log('atmResult',atmResult)
+//     let withdrawAmount = 1500;
+//     var sortedArray = atmResult.sort((a, b) => { return a.currency_denomination > b.currency_denomination; });
+//     console.log('sortedArray',sortedArray)
+//     let amount = withdrawAmount
+//     let denominationArray = []
+//     sortedArray.forEach(function(data) {
+//       denominationArray.push(data.currency_denomination)
+//       let updatedAtmData = [];
+//       console.log('data',data);
+//       if (amount > 0) {
+//         if (data.count > 0 && data.currency_denomination < amount) {
+//           // if (amount % data.currency_denomination != 0) {
+//           //
+//           // }
+//           if(parseInt(amount / data.currency_denomination) != 0) {
+//             let deductedCount = parseInt(amount / data.currency_denomination)
+//             let deductedAmount = deductedCount * data.currency_denomination
+//             amount = amount - deductedAmount
+//             data.count = data.count - deductedCount
+//             updatedAtmData.push(data);
+//           }
+//         }
+//       }
+//     })
+//     if (amount == 0) {
+//       updatedAtmData.forEach(function(data) {
+//         dbConnection.collection("atmFields").findOneAndUpdate({currency_denomination: data.currency_denomination},{ $set: { count:data.count}}, function(err, atmRes) {
+//         })
+//       })
+//     }
+//     else {
+//       res.status(500).json({error: 'Amount must be in multiple of' + denominationArray})
+//     }
+//   })
+// })
+
 app.post('/amountWithdraw',function(req,res) {
   // console.log('req.body',req.body)
-  dbConnection.collection('atmFields').findOne({}, function(err, atmResult) {
+  dbConnection.collection('atmFields').find({}).toArray(function(err, atmResult) {
     // console.log('atmResult',atmResult)
-    dbConnection.collection('transactionFields').find({created_at: {$lte: new Date(), $gte: new Date(new Date().setHours(0, 0, 0, 0))}}).toArray(function(err, transResult) {
-      // console.log('transResult',transResult.length)
-      if(transResult.length == atmResult.count) {
-        res.status(500).json({ error: 'Transaction Limit Exceeds' })
-      }
-      else if(atmResult.currency_denomination === req.body.amount) {
-        res.status(500).json({ error: 'Amount Limit Exceeds' })
+    let withdrawAmount = req.body.amount;
+    var sortedArray = atmResult.sort((a, b) => { return a.currency_denomination < b.currency_denomination; });
+    // console.log('sortedArray',sortedArray)
+    let amount = withdrawAmount
+    let denominationArray = []
+    let updatedAtmData = [];
+    sortedArray.forEach(function(data) {
+      denominationArray.push(data.currency_denomination)
+      // console.log('data',data);
+      if (amount > 0) {
+        if (data.count > 0 && data.currency_denomination < amount) {
+          if(parseInt(amount / data.currency_denomination) != 0) {
+            let deductedCount = parseInt(amount / data.currency_denomination)
+            let deductedAmount = deductedCount * data.currency_denomination
+            amount = amount - deductedAmount
+            data.count = data.count - deductedCount
+            updatedAtmData.push(data);
+          }
+        }
       }
     })
+    if (amount == 0) {
+      updatedAtmData.forEach(function(data) {
+        dbConnection.collection("atmFields").findOneAndUpdate({currency_denomination: data.currency_denomination},{ $set: { count:data.count}}, function(err, atmRes) {
+        })
+      })
+    }
+    else {
+      res.status(500).json({error: 'Amount must be in multiple of' + denominationArray})
+    }
+    // dbConnection.collection('transactionFields').find({created_at: {$lte: new Date(), $gte: new Date(new Date().setHours(0, 0, 0, 0))}}).toArray(function(err, transResult) {
+    //   // console.log('transResult',transResult.length)
+    //   if(transResult.length == atmResult.count) {
+    //     res.status(500).json({ error: 'Transaction Limit Exceeds' })
+    //   }
+    //   else if(atmResult.currency_denomination === req.body.amount) {
+    //     res.status(500).json({ error: 'Amount Limit Exceeds' })
+    //   }
+    // })
+
   })
   dbConnection.collection('cardFields').findOne({card_number: req.body.card_number}, function(err, result) {
     //console.log('result',result)
@@ -92,4 +162,3 @@ app.post('/amountWithdraw',function(req,res) {
 app.listen(port, () => {
     console.log('Server is running on port ' + port);
 });
-
